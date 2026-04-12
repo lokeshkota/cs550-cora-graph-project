@@ -205,3 +205,16 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ===== CS550 Project Specific =====
+# Raw dataset (auto-downloaded by PyG, no need to commit)
+data/
+
+# Saved model weights
+models/*.pth
+
+# Generated outputs (charts, CSVs)
+outputs/
+
+# macOS
+.DS_Store
