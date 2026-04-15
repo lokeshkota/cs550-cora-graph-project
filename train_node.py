@@ -39,18 +39,26 @@ from sklearn.model_selection import train_test_split
 
 from data_loader import load_cora
 from baseline_model import create_80_20_split
-from models import GCN
+from models import GCN, GAT
 from metrics import calculate_node_metrics
 
 
-# ── Hyperparameters ────────────────────────────────────────────
-LR           = 0.01
-WEIGHT_DECAY = 5e-4
-HIDDEN       = 64
-DROPOUT      = 0.5
+# ── GCN Hyperparameters ───────────────────────────────────────
+GCN_LR           = 0.01
+GCN_WEIGHT_DECAY = 5e-4
+GCN_HIDDEN       = 64
+GCN_DROPOUT      = 0.5
+
+# ── GAT Hyperparameters ───────────────────────────────────────
+GAT_LR           = 0.005   # GAT converges with a slightly lower lr
+GAT_WEIGHT_DECAY = 5e-4
+GAT_HEADS        = 8       # 8 parallel attention heads
+GAT_HIDDEN_HEAD  = 8       # 8 features per head → 64 total (same as GCN)
+GAT_DROPOUT      = 0.6     # GAT paper uses 0.6
+
+# ── Shared settings ───────────────────────────────────────
 EPOCHS       = 200
-PRINT_EVERY  = 20     # print progress every N epochs
-MODEL_PATH   = "models/gcn_best.pth"
+PRINT_EVERY  = 20
 RESULTS_PATH = "outputs/results.csv"
 # ──────────────────────────────────────────────────────────────
 
@@ -172,21 +180,25 @@ def evaluate(model, data, mask):
     return accuracy, y_pred, y_true
 
 
-def train_gcn(data, train_mask, val_mask, test_mask):
+def train_model(model, data, train_mask, val_mask, test_mask,
+                lr, weight_decay, model_path, model_name):
     """
-    Full GCN training loop.
+    Generic training loop — works for both GCN and GAT.
 
-    Trains for EPOCHS epochs, saving the model state whenever
-    validation accuracy improves (best checkpoint strategy).
-
-    After training finishes, loads the best checkpoint and
+    Trains for EPOCHS epochs, saving the best checkpoint based on
+    validation accuracy. After training, loads best checkpoint and
     evaluates on the test set.
 
     Args:
-        data       (Data):      Full Cora graph.
-        train_mask (BoolTensor): Training nodes.
-        val_mask   (BoolTensor): Validation nodes (used to select best epoch).
-        test_mask  (BoolTensor): Test nodes (evaluated once at the very end).
+        model        (nn.Module):   Initialised model (GCN or GAT).
+        data         (Data):        Full Cora graph.
+        train_mask   (BoolTensor):  Training nodes.
+        val_mask     (BoolTensor):  Validation nodes.
+        test_mask    (BoolTensor):  Test nodes.
+        lr           (float):       Learning rate.
+        weight_decay (float):       L2 regularisation strength.
+        model_path   (str):         Where to save the best weights.
+        model_name   (str):         Display name (e.g. 'GCN', 'GAT').
 
     Returns:
         dict: Final metrics from metrics.py.
@@ -194,46 +206,28 @@ def train_gcn(data, train_mask, val_mask, test_mask):
     os.makedirs("models",  exist_ok=True)
     os.makedirs("outputs", exist_ok=True)
 
-    # Initialise model, optimiser, and loss function
-    model = GCN(
-        in_channels=data.num_node_features,
-        hidden_channels=HIDDEN,
-        out_channels=int(data.y.max().item()) + 1,
-        dropout=DROPOUT,
-    )
     optimizer = torch.optim.Adam(
-        model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY
+        model.parameters(), lr=lr, weight_decay=weight_decay
     )
     criterion = torch.nn.CrossEntropyLoss()
-    # CrossEntropyLoss = Softmax + Negative Log Likelihood in one step.
-    # It converts raw class scores → probabilities, then penalises
-    # the model for assigning low probability to the correct class.
 
-    print(f"\n[GCN] Starting training — {EPOCHS} epochs")
-    print(f"      LR={LR}, Hidden={HIDDEN}, Dropout={DROPOUT}, "
-          f"Weight Decay={WEIGHT_DECAY}")
+    print(f"\n[{model_name}] Starting training — {EPOCHS} epochs")
     print(f"{'─'*55}")
     print(f"  {'Epoch':>6}  {'Train Loss':>11}  "
           f"{'Val Acc':>9}  {'Best Val':>9}")
     print(f"{'─'*55}")
 
-    best_val_acc  = 0.0
-    best_epoch    = 0
-    history       = []   # track loss + accuracy per epoch for plotting later
+    best_val_acc = 0.0
+    best_epoch   = 0
 
     for epoch in range(1, EPOCHS + 1):
-
         train_loss = train_one_epoch(model, data, train_mask, optimizer, criterion)
         val_acc, _, _ = evaluate(model, data, val_mask)
 
-        history.append({"epoch": epoch, "train_loss": train_loss,
-                        "val_acc": val_acc})
-
-        # Save model if this is the best validation accuracy so far
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_epoch   = epoch
-            torch.save(model.state_dict(), MODEL_PATH)
+            torch.save(model.state_dict(), model_path)
 
         if epoch % PRINT_EVERY == 0 or epoch == 1:
             marker = " ← best" if epoch == best_epoch else ""
@@ -241,23 +235,21 @@ def train_gcn(data, train_mask, val_mask, test_mask):
                   f"{val_acc:>9.4f}  {best_val_acc:>9.4f}{marker}")
 
     print(f"{'─'*55}")
-    print(f"\n[GCN] Training complete.")
-    print(f"      Best val accuracy: {best_val_acc:.4f} at epoch {best_epoch}")
-    print(f"      Saved weights → {MODEL_PATH}")
+    print(f"\n[{model_name}] Best val accuracy: {best_val_acc:.4f} "
+          f"at epoch {best_epoch}")
+    print(f"[{model_name}] Saved weights → {model_path}")
 
-    # ── Final Evaluation on Test Set ──────────────────────────
-    # Load the best checkpoint (not the last epoch's weights)
-    model.load_state_dict(torch.load(MODEL_PATH))
-    print(f"\n[GCN] Evaluating best checkpoint on test set...")
-
+    # Load best checkpoint and evaluate on test set
+    model.load_state_dict(torch.load(model_path, weights_only=True))
+    print(f"\n[{model_name}] Evaluating best checkpoint on test set...")
     _, y_pred, y_true = evaluate(model, data, test_mask)
-    results = calculate_node_metrics(y_pred=y_pred, y_true=y_true,
-                                     model_name="GCN")
+    results = calculate_node_metrics(
+        y_pred=y_pred, y_true=y_true, model_name=model_name
+    )
 
-    # ── Save results to CSV ───────────────────────────────────
-    results["best_epoch"] = best_epoch
+    # Append to results CSV
+    results["best_epoch"]   = best_epoch
     results["best_val_acc"] = round(best_val_acc, 4)
-
     file_exists = os.path.isfile(RESULTS_PATH)
     with open(RESULTS_PATH, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=results.keys())
@@ -265,12 +257,6 @@ def train_gcn(data, train_mask, val_mask, test_mask):
             writer.writeheader()
         writer.writerow(results)
 
-    print(f"\n[GCN] Results saved → {RESULTS_PATH}")
-    print(f"\n{'='*55}")
-    print(f"  SUMMARY")
-    print(f"{'='*55}")
-    print(f"  LR Baseline accuracy:  76.57%")
-    print(f"  GCN Test accuracy:     {results['accuracy']*100:.2f}%")
     delta = results['accuracy'] - 0.7657
     symbol = "▲" if delta > 0 else "▼"
     print(f"  Improvement:           {symbol} {abs(delta)*100:.2f}%")
@@ -279,14 +265,66 @@ def train_gcn(data, train_mask, val_mask, test_mask):
     return results
 
 
+def train_gcn(data, train_mask, val_mask, test_mask):
+    """Initialises and trains the GCN model."""
+    model = GCN(
+        in_channels=data.num_node_features,
+        hidden_channels=GCN_HIDDEN,
+        out_channels=int(data.y.max().item()) + 1,
+        dropout=GCN_DROPOUT,
+    )
+    return train_model(
+        model, data, train_mask, val_mask, test_mask,
+        lr=GCN_LR, weight_decay=GCN_WEIGHT_DECAY,
+        model_path="models/gcn_best.pth", model_name="GCN",
+    )
+
+
+def train_gat(data, train_mask, val_mask, test_mask):
+    """Initialises and trains the GAT model."""
+    model = GAT(
+        in_channels=data.num_node_features,
+        hidden_per_head=GAT_HIDDEN_HEAD,
+        out_channels=int(data.y.max().item()) + 1,
+        heads=GAT_HEADS,
+        dropout=GAT_DROPOUT,
+    )
+    return train_model(
+        model, data, train_mask, val_mask, test_mask,
+        lr=GAT_LR, weight_decay=GAT_WEIGHT_DECAY,
+        model_path="models/gat_best.pth", model_name="GAT",
+    )
+
+
 if __name__ == "__main__":
+
     # Load data
     _, data = load_cora()
 
-    # Create 70/10/20 split
+    # Create 70/10/20 split (same for both models — fair comparison)
     train_mask, val_mask, test_mask = make_three_way_split(data)
 
-    # Train GCN and evaluate
-    results = train_gcn(data, train_mask, val_mask, test_mask)
+    # ── Train GCN first ──────────────────────────────────────
+    gcn_results = train_gcn(data, train_mask, val_mask, test_mask)
 
-    print("✅ train_node.py complete.")
+    # ── Train GAT second ─────────────────────────────────────
+    gat_results = train_gat(data, train_mask, val_mask, test_mask)
+
+    # ── Final side-by-side comparison ────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  FINAL MODEL COMPARISON")
+    print(f"{'='*60}")
+    print(f"  {'Model':<12} {'Accuracy':>10} {'Precision':>10} "
+          f"{'Recall':>10} {'F1':>10}")
+    print(f"  {'-'*52}")
+    print(f"  {'LR Baseline':<12} {'76.57%':>10} {'-':>10} "
+          f"{'-':>10} {'-':>10}")
+    for r in [gcn_results, gat_results]:
+        print(f"  {r['model']:<12} "
+              f"{r['accuracy']*100:>9.2f}% "
+              f"{r['precision']:>10.4f} "
+              f"{r['recall']:>10.4f} "
+              f"{r['f1']:>10.4f}")
+    print(f"{'='*60}")
+
+    print("\n✅ train_node.py complete.")

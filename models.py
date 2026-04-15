@@ -8,8 +8,7 @@ The training logic lives in train_node.py and train_link.py.
 
 Models defined here:
   [x] GCN  — Graph Convolutional Network (node classification baseline)
-  [ ] GAT  — Graph Attention Network     (node classification main model)
-              → Will be added here after GCN is verified working.
+  [x] GAT  — Graph Attention Network     (node classification main model)
 
 How GCN works (intuition):
   Regular neural networks look at each node's features in isolation.
@@ -28,7 +27,7 @@ How GCN works (intuition):
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv
 
 
 # ──────────────────────────────────────────────────────────────
@@ -114,27 +113,108 @@ class GCN(torch.nn.Module):
 
 # ──────────────────────────────────────────────────────────────
 #  MODEL 2: GAT — Main Model for Node Classification
-#  STATUS: Not yet implemented — added after GCN is verified.
 # ──────────────────────────────────────────────────────────────
 
-# class GAT(torch.nn.Module):
-#     """
-#     Graph Attention Network — upgrade over GCN.
-#
-#     Key difference from GCN:
-#       GCN averages neighbor features equally (every neighbor counts the same).
-#       GAT learns WHICH neighbors to pay more attention to.
-#       e.g. A paper citing 10 papers — some citations are more relevant than
-#       others for classification. GAT figures that out automatically.
-#
-#     Multi-head attention:
-#       Runs `heads` separate attention mechanisms in parallel,
-#       then concatenates their outputs. Gives the model multiple
-#       "perspectives" on the neighborhood.
-#
-#     Will be implemented here after GCN achieves ~81% accuracy.
-#     """
-#     pass
+class GAT(torch.nn.Module):
+    """
+    Two-layer Graph Attention Network for node classification.
+
+    Key upgrade over GCN:
+      GCN: aggregates neighbor features by taking a SIMPLE AVERAGE.
+           Every neighbor counts equally, regardless of relevance.
+      GAT: learns an ATTENTION SCORE for each (node, neighbor) pair.
+           More relevant neighbors get higher scores and contribute more.
+           e.g. A paper about RL citing 10 papers — the 3 that are also
+           about RL get high attention; the off-topic ones get low attention.
+
+    Multi-head attention (heads=8):
+      Runs 8 independent attention mechanisms in parallel.
+      Each head learns to focus on DIFFERENT aspects of the neighborhood.
+      Their outputs are concatenated after Layer 1, averaged after Layer 2.
+      This is analogous to how Transformers work in NLP.
+
+    Architecture:
+        Input (1433 word features)
+            ↓  Dropout on raw input features
+            ↓  GATConv Layer 1  [1433 → 8 features × 8 heads → 64 features]
+            ↓  ELU activation   (smoother than ReLU, standard for GAT)
+            ↓  Dropout
+            ↓  GATConv Layer 2  [64 → 7 classes, 1 head, averaged]
+        Output (raw scores for each of the 7 Cora topics)
+
+    Why ELU instead of ReLU?
+      ELU (Exponential Linear Unit) allows small negative values instead of
+      clamping at 0. This helps gradient flow and tends to work better with
+      attention mechanisms.
+
+    Args:
+        in_channels  (int):   Input features per node. For Cora: 1433.
+        hidden_per_head (int): Features per attention head in Layer 1.
+                               Default 8. Total hidden = hidden_per_head × heads.
+        out_channels (int):   Number of output classes. For Cora: 7.
+        heads        (int):   Number of parallel attention heads. Default 8.
+        dropout      (float): Dropout probability. Default 0.6.
+    """
+
+    def __init__(self, in_channels, hidden_per_head=8, out_channels=7,
+                 heads=8, dropout=0.6):
+        super(GAT, self).__init__()
+        self.dropout = dropout
+
+        # Layer 1: multi-head attention
+        #   Each head produces `hidden_per_head` features.
+        #   concat=True → concatenate all heads → total: hidden_per_head * heads
+        #   e.g. 8 features × 8 heads = 64 features (same size as GCN hidden layer)
+        self.conv1 = GATConv(
+            in_channels,
+            hidden_per_head,
+            heads=heads,
+            dropout=dropout,
+            concat=True,
+        )
+
+        # Layer 2: single-head attention for final classification
+        #   Input: hidden_per_head * heads (64)
+        #   concat=False → AVERAGE the head outputs → shape: [nodes, out_channels]
+        self.conv2 = GATConv(
+            hidden_per_head * heads,
+            out_channels,
+            heads=1,
+            dropout=dropout,
+            concat=False,
+        )
+
+    def forward(self, x, edge_index):
+        """
+        Defines how data flows through the GAT.
+
+        Note: dropout is applied to the raw INPUT features in GAT
+        (unlike GCN where dropout sits between the two conv layers).
+        This follows the original GAT paper (Veličković et al., 2018).
+
+        Args:
+            x          (Tensor): Node features. Shape [num_nodes, 1433].
+            edge_index (Tensor): Graph edges in COO format. Shape [2, num_edges].
+
+        Returns:
+            Tensor: Raw class scores (logits). Shape [num_nodes, 7].
+        """
+        # Dropout on raw input features (GAT paper recommendation)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # Layer 1: multi-head attention aggregation
+        x = self.conv1(x, edge_index)
+
+        # ELU activation — smoother alternative to ReLU
+        x = F.elu(x)
+
+        # Dropout between layers
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # Layer 2: final classification head
+        x = self.conv2(x, edge_index)
+
+        return x  # raw logits → CrossEntropyLoss handles softmax
 
 
 # ──────────────────────────────────────────────────────────────
@@ -143,7 +223,7 @@ class GCN(torch.nn.Module):
 
 if __name__ == "__main__":
     """
-    Verifies the GCN model initialises and runs a forward pass
+    Verifies BOTH models initialise and run forward passes
     without errors using dummy data matching Cora's dimensions.
     """
     print("Running models.py sanity check...\n")
@@ -179,5 +259,25 @@ if __name__ == "__main__":
     assert out.shape == (num_nodes, num_classes), \
         f"Shape mismatch! Got {out.shape}, expected ({num_nodes}, {num_classes})"
 
-    print("\n✅ GCN forward pass successful — shapes are correct.")
-    print("   Ready to be trained in train_node.py")
+    print(f"\n✅ GCN forward pass successful — shapes are correct.")
+
+    # ── GAT sanity check ──────────────────────────────────────
+    gat_model = GAT(
+        in_channels=num_features,
+        hidden_per_head=8,
+        out_channels=num_classes,
+        heads=8,
+        dropout=0.6,
+    )
+    print(f"\nGAT architecture:\n{gat_model}\n")
+
+    gat_model.eval()
+    with torch.no_grad():
+        gat_out = gat_model(x_dummy, edge_index_dummy)
+
+    print(f"GAT Output shape: {gat_out.shape}  ← should be [2708, 7]")
+    assert gat_out.shape == (num_nodes, num_classes), \
+        f"Shape mismatch! Got {gat_out.shape}"
+
+    print("\n✅ GAT forward pass successful — shapes are correct.")
+    print("   Both models ready to be trained in train_node.py")
