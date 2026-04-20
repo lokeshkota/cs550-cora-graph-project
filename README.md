@@ -12,9 +12,10 @@ This project implements **graph-based machine learning** on the [Cora citation n
 
 The goal is to:
 
-1. **Node Classification** — Predict the research topic of a paper based on its word content and citation links
-2. **Link Prediction** — Predict missing citation links between papers
-3. **Interactive Demo** — A Streamlit web app with model explainability
+1. **Node Classification** — Predict paper topics based on content and citations (GCN/GAT)
+2. **Link Prediction** — Predict missing citations using Variational Graph Auto-Encoders (VGAE)
+3. **Interactive Dashboard** — A 3D-graph explorer with real-time inference
+4. **Trustworthiness & Ethics** — Integrated xAI, Fairness Audits, and Robustness stress-testing
 
 **Dataset:** Cora — 2,708 papers, 10,556 citation edges, 7 topic classes, 1,433 word features per paper.
 
@@ -24,9 +25,9 @@ The goal is to:
 
 | Member   | Role                                    | Primary Files                                                  |
 | -------- | --------------------------------------- | -------------------------------------------------------------- |
-| Member 1 | Graph Architect — Data & Infrastructure | `data_loader.py`, `baseline_model.py`, `metrics.py`, `main.py` |
-| Member 2 | ML Engine Builder — Core Algorithms     | `models.py`, `train_node.py`, `train_link.py`, `plot.py`       |
-| Member 3 | Demo & Ethics Lead — AI Integration     | `app.py`, LaTeX report, presentation slides                    |
+| Mayank Shetty Sreekanth | Graph Architect — Data & Infrastructure | `data_loader.py`, `baseline_model.py`, `metrics.py`, `main.py` |
+| Lokesh Kota            | ML Engine Builder — Core Algorithms     | `models.py`, `train_node.py`, `train_link.py`, `plot.py`       |
+| Prajwal Srinivas       | Demo & Ethics Lead — AI Integration     | `app.py`, LaTeX report, presentation slides                    |
 
 ---
 
@@ -163,6 +164,9 @@ cs550-cora-graph-project/
 ├── main.py                 # Master pipeline — runs everything end to end
 ├── app.py                  # Streamlit interactive demo
 │
+├── robustness.py          # Adversarial stress-testing engine
+├── explainer.py           # xAI logic (GNNExplainer + neighborhood analysis)
+├── llm_explain.py         # Natural language insights via Groq/OpenAI APIs
 ├── requirements.txt        # Locked library versions
 └── README.md               # You are here
 ```
@@ -202,13 +206,25 @@ Every push triggers an automated test on GitHub Actions:
 
 ---
 
-## 📊 Baseline Performance
+## 📊 Final Performance Metrics
 
-| Model                          | Accuracy   | Notes                                 |
-| ------------------------------ | ---------- | ------------------------------------- |
-| Logistic Regression (no edges) | **76.57%** | Features only — our performance floor |
-| GCN _(in progress)_            | TBD        | Should exceed 80%                     |
-| GAT _(in progress)_            | TBD        | Expected best performer               |
+| Model                          | Feature/Metric | Score / Accuracy | Status |
+| ------------------------------ | -------------- | ---------------- | ------ |
+| Logistic Regression (Baseline) | Accuracy       | 76.57%           | ✅ Baseline |
+| GCN (Graph Convolution)        | Accuracy       | **88.93%**      | ✅ Complete |
+| GAT (Graph Attention)          | Accuracy       | 88.19%           | ✅ Complete |
+| VGAE (Link Prediction)         | AUC-ROC        | **0.934**        | ✅ Complete |
+
+---
+
+## ✅ Final Submission Checklist
+
+Before zipping the project, verify that:
+- [ ] **Data exists**: `data/Cora/raw/` contains the 8 Planetoid files.
+- [ ] **Models trained**: `models/` contains `gat_best.pth` and `vgae_best.pth`.
+- [ ] **Outputs populated**: `outputs/` contains `results.csv` and necessary PNG plots.
+- [ ] **Environment ready**: `pip install -r requirements.txt` has been run.
+- [ ] **Core files**: `app.py`, `explainer.py`, `robustness.py`, and `llm_explain.py` all present.
 
 ---
 
