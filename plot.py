@@ -12,11 +12,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import roc_curve, auc
+import torch
+from sklearn.metrics import roc_curve, auc, confusion_matrix
+from sklearn.manifold import TSNE
 
 from data_loader import load_cora
 from baseline_model import create_80_20_split, run_baseline
 from metrics import calculate_node_metrics
+from models import GAT
 
 
 EXPERIMENT_TAG = ""
@@ -75,14 +78,38 @@ _TAG_SUFFIX = _suffix(EXPERIMENT_TAG)
 
 RESULTS_PATH = f"outputs/results{_TAG_SUFFIX}.csv"
 OUTPUT_DIR = "outputs"
-NODE_PLOT_PATH = f"outputs/node_classification_comparison{_TAG_SUFFIX}.png"
-LINK_BAR_PATH = f"outputs/gae_vgae_comparison{_TAG_SUFFIX}.png"
-LINK_TABLE_PATH = f"outputs/gae_vgae_table{_TAG_SUFFIX}.png"
-ROC_PLOT_PATH = f"outputs/link_prediction_roc{_TAG_SUFFIX}.png"
+ACADEMIC_DIR = "selected_plots"
+
+# File basenames for synchronization
+NODE_PLOT_FILE = f"node_classification_comparison{_TAG_SUFFIX}.png"
+LINK_BAR_FILE = f"gae_vgae_comparison{_TAG_SUFFIX}.png"
+LINK_TABLE_FILE = f"gae_vgae_table{_TAG_SUFFIX}.png"
+ROC_PLOT_FILE = f"link_prediction_roc{_TAG_SUFFIX}.png"
+CM_PLOT_FILE = f"confusion_matrix{_TAG_SUFFIX}.png"
+TSNE_PLOT_FILE = f"tsne_clusters{_TAG_SUFFIX}.png"
+
+# Full paths
+NODE_PLOT_PATH = os.path.join(OUTPUT_DIR, NODE_PLOT_FILE)
+LINK_BAR_PATH = os.path.join(OUTPUT_DIR, LINK_BAR_FILE)
+LINK_TABLE_PATH = os.path.join(OUTPUT_DIR, LINK_TABLE_FILE)
+ROC_PLOT_PATH = os.path.join(OUTPUT_DIR, ROC_PLOT_FILE)
+CM_PLOT_PATH = os.path.join(OUTPUT_DIR, CM_PLOT_FILE)
+TSNE_PLOT_PATH = os.path.join(OUTPUT_DIR, TSNE_PLOT_FILE)
 
 
-def _ensure_output_dir():
+def _ensure_dirs():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(ACADEMIC_DIR, exist_ok=True)
+
+
+def _save_dual(filename):
+    """Saves the current figure to both outputs/ and selected_plots/ for sync."""
+    out_path = os.path.join(OUTPUT_DIR, filename)
+    acad_path = os.path.join(ACADEMIC_DIR, filename)
+    
+    plt.savefig(out_path, dpi=220)
+    plt.savefig(acad_path, dpi=220)
+    print(f"[plot.py] Synced -> {out_path} & {acad_path}")
 
 
 def _safe_load_results(path=RESULTS_PATH):
@@ -92,7 +119,9 @@ def _safe_load_results(path=RESULTS_PATH):
 
 
 def _rows_for_models(df, task_name, model_names):
-    task_df = df[df.get("task", "") == task_name].copy()
+    if df.empty or "task" not in df.columns or "model" not in df.columns:
+        return []
+    task_df = df[df["task"] == task_name].copy()
     rows = []
     for model_name in model_names:
         row = _latest_row(task_df, model_name)
@@ -102,6 +131,8 @@ def _rows_for_models(df, task_name, model_names):
 
 
 def _latest_row(df, model_name):
+    if df.empty or "model" not in df.columns:
+        return None
     rows = df[df["model"] == model_name]
     if rows.empty:
         return None
@@ -172,7 +203,7 @@ def plot_node_classification_comparison(df):
     _add_bar_labels(ax, decimals=4)
     plt.xticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(NODE_PLOT_PATH, dpi=220)
+    _save_dual(NODE_PLOT_FILE)
     plt.close()
     print(f"[plot.py] Saved -> {NODE_PLOT_PATH}")
 
@@ -206,7 +237,7 @@ def plot_link_metrics_comparison(df):
     _add_bar_labels(ax, decimals=4)
     plt.xticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(LINK_BAR_PATH, dpi=220)
+    _save_dual(LINK_BAR_FILE)
     plt.close()
     print(f"[plot.py] Saved -> {LINK_BAR_PATH}")
 
@@ -298,7 +329,7 @@ def plot_link_metrics_table(df):
     plt.ylabel("Metric Group / Metric")
     plt.yticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(LINK_TABLE_PATH, dpi=220)
+    _save_dual(LINK_TABLE_FILE)
     plt.close()
     print(f"[plot.py] Saved -> {LINK_TABLE_PATH}")
 
@@ -341,19 +372,85 @@ def plot_link_prediction_roc():
     plt.title("Link Prediction ROC Curve", fontsize=14, fontweight="bold")
     plt.legend(loc="lower right")
     plt.tight_layout()
-    plt.savefig(ROC_PLOT_PATH, dpi=220)
+    _save_dual(ROC_PLOT_FILE)
     plt.close()
     print(f"[plot.py] Saved -> {ROC_PLOT_PATH}")
 
 
+def plot_node_diagnostics():
+    """Generates T-SNE and Confusion Matrix from the trained GAT model."""
+    _ensure_dirs()
+    
+    # Load data
+    _, data = load_cora()
+    
+    # Load GAT Model
+    model = GAT(
+        in_channels=data.num_node_features,
+        hidden_per_head=8,
+        out_channels=int(data.y.max().item()) + 1,
+        heads=8,
+        dropout=0.6
+    )
+    
+    weights_path = "models/gat_best.pth"
+    if not os.path.exists(weights_path):
+        print(f"[plot.py] Model weights not found at {weights_path}. Skipping T-SNE/CM.")
+        return
+
+    model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
+    model.eval()
+
+    # Get predictions and latent embeddings
+    with torch.no_grad():
+        # Using output of first layer for embeddings
+        embeddings = model.conv1(data.x, data.edge_index)
+        outputs = model(data.x, data.edge_index)
+        preds = outputs.argmax(dim=1)
+
+    # 1. Confusion Matrix
+    y_true = data.y[data.test_mask].numpy()
+    y_pred = preds[data.test_mask].numpy()
+    cm = confusion_matrix(y_true, y_pred)
+    classes = ["Case Based", "Genetic Algorithms", "Neural Networks", "Probabilistic Methods", "Reinforcement Learning", "Rule Learning", "Theory"]
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=classes, yticklabels=classes)
+    plt.title("GAT Confusion Matrix (Cora Test Set)", fontsize=14, fontweight="bold")
+    plt.ylabel("True Label")
+    plt.xlabel("Predicted Label")
+    plt.tight_layout()
+    _save_dual(CM_PLOT_FILE)
+    plt.close()
+    print(f"[plot.py] Saved -> {CM_PLOT_PATH}")
+
+    # 2. T-SNE Clustering
+    print("[plot.py] Running T-SNE clustering (this might take a minute)...")
+    tsne = TSNE(n_components=2, random_state=42)
+    z_tsne = tsne.fit_transform(embeddings.numpy())
+    
+    plt.figure(figsize=(10, 8))
+    for i, cls in enumerate(classes):
+        mask = data.y.numpy() == i
+        plt.scatter(z_tsne[mask, 0], z_tsne[mask, 1], label=cls, s=15, alpha=0.7)
+    
+    plt.title("T-SNE Visualization of GAT Latent Space Clusters", fontsize=14, fontweight="bold")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    _save_dual(TSNE_PLOT_FILE)
+    plt.close()
+    print(f"[plot.py] Saved -> {TSNE_PLOT_PATH}")
+
+
 def generate_all_plots():
-    _ensure_output_dir()
+    _ensure_dirs()
     print(f"[plot.py] Experiment tag: {EXPERIMENT_TAG}")
     df = _safe_load_results()
     plot_node_classification_comparison(df)
     plot_link_metrics_comparison(df)
     plot_link_metrics_table(df)
     plot_link_prediction_roc()
+    plot_node_diagnostics()
     print("[plot.py] Finished generating available plots.")
 
 

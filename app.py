@@ -706,24 +706,38 @@ with lp_c2:
 
 # ══════════════════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════════════════
-# SECTION 3 — Comparative Analysis (Visual Proof)
+# SECTION 4 — Research Benchmarks & Official Results
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader("Comparative Performance Analysis")
+st.subheader("Research Benchmarks & Official Results")
+st.caption("Official performance metrics from the definitive project report, established via multi-pass training.")
 
-v1, v2 = st.columns(2, gap="large")
-with v1:
+# Row 1: Node Classification and Link Prediction Metrics
+rb_c1, rb_c2 = st.columns(2, gap="large")
+with rb_c1:
     plot_node = get_plot_path("node_classification_comparison.png")
     if plot_node:
-        st.image(plot_node, caption="GAT vs GCN vs Baseline: Node Classification Accuracy")
-    else: st.info("Node classification plot awaiting collaborator output.")
+        st.image(plot_node, use_container_width=True)
+    else: st.info("Node performance diagnostics awaiting output.")
 
-with v2:
-    plot_link = get_plot_path("gae_vgae_table.png") or get_plot_path("link_prediction_roc.png")
+with rb_c2:
+    plot_link = get_plot_path("gae_vgae_comparison.png")
     if plot_link:
-        st.image(plot_link, caption="GAE (GAT Encoder) vs VGAE: Link Prediction Metrics")
-    else: st.info("Link prediction plot awaiting collaborator output.")
+        st.image(plot_link, use_container_width=True)
+    else: st.info("Link discovery diagnostics awaiting output.")
 
-st.caption("Visual Artifacts populated from team-wide research logs.")
+# Row 2: ROC Curve and Detailed Heatmap
+rb_c3, rb_c4 = st.columns(2, gap="large")
+with rb_c3:
+    plot_roc = get_plot_path("link_prediction_roc.png")
+    if plot_roc:
+        st.image(plot_roc, use_container_width=True, caption="Link Prediction ROC Curve")
+    else: st.info("ROC Curve diagnostics awaiting output.")
+
+with rb_c4:
+    plot_table = get_plot_path("gae_vgae_table.png")
+    if plot_table:
+        st.image(plot_table, use_container_width=True, caption="Detailed Ranking & Threshold Metrics")
+    else: st.info("Detailed metrics table awaiting output.")
 
 st.markdown("---")
 
@@ -781,7 +795,6 @@ if st.button("Run Live Fairness Audit", type="secondary"):
                 min_class = report_df[report_df['f1-score'] == min_f1].index[0]
                 st.markdown("**Fairness Analysis**")
                 st.warning(f"Detection: Performance dip identified for **{min_class}**.")
-                st.info("Recommendation: The model shows topic-bias. Collect more expert-labeled samples for low-performing classes to improve parity.")
                 
                 with st.expander("Full Statistical Audit"):
                     st.dataframe(report_df[['precision', 'recall', 'f1-score']].style.highlight_min(axis=0, color='#ef476f'), use_container_width=True)

@@ -1,7 +1,5 @@
-model,task,precision,recall,f1,auc_roc,avg_precision,best_epoch,best_val_auc,prediction_at_10,hits_at_10,prediction_at_50,hits_at_50,prediction_at_100,hits_at_100,selected_threshold,val_f1_at_selected_threshold
-GAE,link_prediction,0.5,1.0,0.6667,0.9267,0.9316,135.0,0.9287,,,,,,,,
-VGAE,link_prediction,0.5,1.0,0.6667,0.9307,0.9347,78.0,0.9297,,,,,,,,
-GCN,node_classification,0.8745,0.8706,0.8641,0.8665,23.0,0.9041,,,,,,,,,
-GAT,node_classification,0.8782,0.8829,0.8708,0.8763,75.0,0.9041,,,,,,,,,
-GAE,link_prediction,0.8411,0.8235,0.8322,0.9025,0.9023,60.0,0.9143,1.0,0.019,1.0,0.0949,0.98,0.186,0.67,0.8467
-VGAE,link_prediction,0.7804,0.8899,0.8316,0.9067,0.902,52.0,0.9221,1.0,0.019,0.96,0.0911,0.96,0.1822,0.65,0.8491
+model,task,accuracy,precision,recall,f1,best_epoch,best_val_acc,auc_roc,avg_precision,prediction_at_10,hits_at_10,prediction_at_50,hits_at_50,prediction_at_100,hits_at_100,best_val_auc,selected_threshold,val_f1_at_selected_threshold
+GCN,node_classification,0.8838,0.8843,0.8789,0.8811,19,0.9077,,,,,,,,,,,
+GAT,node_classification,0.8745,0.8882,0.8588,0.8715,26,0.9041,,,,,,,,,,,
+GAE,link_prediction,,0.8693,0.7951,0.8305,166,,0.9185,0.9229,1.0,0.019,1.0,0.0949,0.99,0.1879,0.9247,0.67,0.8597
+VGAE,link_prediction,,0.8561,0.8577,0.8569,85,,0.9295,0.9321,1.0,0.019,0.98,0.093,0.98,0.186,0.9274,0.66,0.8726
