@@ -184,7 +184,7 @@ class GAT(torch.nn.Module):
             concat=False,
         )
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, return_attention_weights=False):
         """
         Defines how data flows through the GAT.
 
@@ -195,6 +195,7 @@ class GAT(torch.nn.Module):
         Args:
             x          (Tensor): Node features. Shape [num_nodes, 1433].
             edge_index (Tensor): Graph edges in COO format. Shape [2, num_edges].
+            return_attention_weights (bool): If True, returns attention weights for layer 1.
 
         Returns:
             Tensor: Raw class scores (logits). Shape [num_nodes, 7].
@@ -203,7 +204,10 @@ class GAT(torch.nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
 
         # Layer 1: multi-head attention aggregation
-        x = self.conv1(x, edge_index)
+        if return_attention_weights:
+            x, attn1 = self.conv1(x, edge_index, return_attention_weights=True)
+        else:
+            x = self.conv1(x, edge_index)
 
         # ELU activation — smoother alternative to ReLU
         x = F.elu(x)
@@ -214,7 +218,9 @@ class GAT(torch.nn.Module):
         # Layer 2: final classification head
         x = self.conv2(x, edge_index)
 
-        return x  # raw logits → CrossEntropyLoss handles softmax
+        if return_attention_weights:
+            return x, [attn1]
+        return x
 
 
 # ──────────────────────────────────────────────────────────────
