@@ -109,31 +109,36 @@ def get_plot_path(filename):
 # ── Load model & data ──────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading Cora dataset and GAT model…")
 def load_everything():
-    try:
-        from data_loader import load_cora
-        from models import GAT
-        # Use local dataset to avoid download errors
-        dataset, data = load_cora(root="data/Cora")
-    except Exception:
-        from torch_geometric.datasets import Planetoid
-        import torch_geometric.transforms as T
-        from gat_model import GATNodeClassifier as GAT
-        root = "data/Cora/Cora" if Path("data/Cora/Cora").exists() else "data/Cora"
-        dataset = Planetoid(root=root, name="Cora", transform=T.NormalizeFeatures())
-        data    = dataset[0]
+    from data_loader import load_cora
+    from models import GAT
+    
+    # Load dataset
+    dataset, data = load_cora(root="data/Cora")
 
-    # Use your GAT architecture
-    from gat_model import GATNodeClassifier
-    model = GATNodeClassifier(in_channels=dataset.num_features, hidden_channels=64, out_channels=dataset.num_classes, heads=8)
+    # Initialize Team GAT Architecture
+    model = GAT(
+        in_channels=dataset.num_features, 
+        hidden_per_head=8, 
+        out_channels=dataset.num_classes, 
+        heads=8,
+        dropout=0.6
+    )
     
     loaded = False
-    weights_path = Path("gat_best.pth")
+    # Check multiple locations for weights
+    weights_path = Path("models/gat_best.pth")
+    if not weights_path.exists():
+        weights_path = Path("gat_best.pth")
     if not weights_path.exists():
         weights_path = Path(os.path.join(REPO_PATH, "models/gat_best.pth"))
     
     if weights_path.exists():
-        model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
-        loaded = True
+        try:
+            model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
+            loaded = True
+        except Exception as e:
+            st.warning(f"Weight mismatch: {e}. Starting in Demo Mode.")
+    
     model.eval()
     return data, model, loaded
 
