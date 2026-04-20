@@ -47,3 +47,4 @@ tzdata==2026.1
 urllib3==2.6.3
 yarl==1.22.0
 zipp==3.23.0
+streamlit==1.50.0
