@@ -21,13 +21,11 @@ The goal is to:
 
 ---
 
-## 👥 Team & Responsibilities
+## 👥 Contributors
 
-| Member   | Role                                    | Primary Files                                                  |
-| -------- | --------------------------------------- | -------------------------------------------------------------- |
-| Mayank Shetty Sreekanth | Graph Architect — Data & Infrastructure | `data_loader.py`, `baseline_model.py`, `metrics.py`, `main.py` |
-| Lokesh Kota            | ML Engine Builder — Core Algorithms     | `models.py`, `train_node.py`, `train_link.py`, `plot.py`       |
-| Prajwal Srinivas       | Demo & Ethics Lead — AI Integration     | `app.py`, LaTeX report, presentation slides                    |
+- Mayank Shetty Sreekanth
+- Lokesh Kota
+- Prajwal Srinivas
 
 ---
 
@@ -182,10 +180,10 @@ cs550-cora-graph-project/
 git checkout -b feature/your-task-name
 
 # Example branch names:
-# feature/gcn-node-classification   ← Member 2
-# feature/gae-link-prediction       ← Member 2
-# feature/streamlit-demo            ← Member 3
-# feature/metrics-engine            ← Member 1
+# feature/gcn-node-classification
+# feature/gae-link-prediction
+# feature/streamlit-demo
+# feature/metrics-engine
 
 # Push your branch to GitHub
 git push origin feature/your-task-name
