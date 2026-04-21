@@ -44,11 +44,11 @@ LINK_METRIC_GROUPS = {
     ],
     "Top-K Ranking": [
         "prediction_at_10",
-        "hits_at_10",
+        "recall_at_10",
         "prediction_at_50",
-        "hits_at_50",
+        "recall_at_50",
         "prediction_at_100",
-        "hits_at_100",
+        "recall_at_100",
     ],
 }
 
@@ -61,11 +61,11 @@ METRIC_DISPLAY_NAMES = {
     "selected_threshold": "Selected Threshold",
     "val_f1_at_selected_threshold": "Val F1 @ Selected Threshold",
     "prediction_at_10": "Prediction@10",
-    "hits_at_10": "Hits@10",
+    "recall_at_10": "Recall@10",
     "prediction_at_50": "Prediction@50",
-    "hits_at_50": "Hits@50",
+    "recall_at_50": "Recall@50",
     "prediction_at_100": "Prediction@100",
-    "hits_at_100": "Hits@100",
+    "recall_at_100": "Recall@100",
 }
 
 
