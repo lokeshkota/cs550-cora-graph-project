@@ -496,7 +496,8 @@ except Exception as ex:
     st.stop()
 
 # ── Header & Dataset Overview ──────────────────────────────────────────────
-st.title("Graph Attention Networks on Cora")
+st.title("High-Fidelity Graph Neural Networks for Node Classification on the Cora Network")
+st.caption("Mayank Shetty Sreekanth (ms4030) | Lokesh Kota (lk671) | Prajwal Srinivas (ps1458)")
 st.caption(f"CS550 · Spring 2026 · Papers: {data.num_nodes:,} | Links: {data.num_edges:,} | Word Features: {data.num_features}")
 
 if not weights_loaded:
