@@ -130,7 +130,8 @@ def calculate_link_metrics(
 
         Ranking metrics:
             - prediction@k: precision among top-k scored candidate links.
-            - hits@k:       recall-like coverage of true links captured in top-k.
+            - hits@k:       (legacy) renamed to recall@k for mathematical rigor.
+            - recall@k:     Coverage of true links captured in top-k most confident predictions.
 
     Returns:
         dict: {
@@ -162,9 +163,9 @@ def calculate_link_metrics(
         topk_true = y_true[sorted_idx[:k_eff]]
         tp_at_k = int(topk_true.sum())
         prediction_at_k = tp_at_k / k_eff
-        hits_at_k = tp_at_k / max(total_true, 1)
+        recall_at_k = tp_at_k / max(total_true, 1)
         ranking_metrics[f"prediction_at_{k}"] = round(prediction_at_k, 4)
-        ranking_metrics[f"hits_at_{k}"] = round(hits_at_k, 4)
+        ranking_metrics[f"recall_at_{k}"] = round(recall_at_k, 4)
 
     if verbose:
         print(f"\n{'='*50}")
@@ -178,11 +179,11 @@ def calculate_link_metrics(
         print(f"  Average Precision:   {avg_prec:.4f}  ← threshold-independent")
         for k in k_values:
             pred_key = f"prediction_at_{k}"
-            hit_key = f"hits_at_{k}"
-            if pred_key in ranking_metrics and hit_key in ranking_metrics:
+            rec_key = f"recall_at_{k}"
+            if pred_key in ranking_metrics and rec_key in ranking_metrics:
                 print(
                     f"  Prediction@{k}:       {ranking_metrics[pred_key]:.4f}"
-                    f"  | Hits@{k}: {ranking_metrics[hit_key]:.4f}"
+                    f"  | Recall@{k}: {ranking_metrics[rec_key]:.4f}"
                 )
         print(f"{'='*50}\n")
 
