@@ -290,23 +290,29 @@ def get_mechanistic_metrics(model, data, node_id: int) -> dict[str, Any]:
         # Layer 1 weights
         attn_edge_index, attn_weights = attn_weights_list[0]
         # Get weights for this specific node (where it is target)
-        mask_attn = attn_edge_index[1] == node_id
+        mask_attn = (attn_edge_index[1] == node_id) & (attn_edge_index[0] != node_id)
         node_attn = attn_weights[mask_attn] # (num_nbrs, num_heads)
         
         if node_attn.size(0) > 0:
-            # Flatten across heads or average? Let's average heads first
+            # Average across heads
             avg_attn = node_attn.mean(dim=1)
-            # Normalize to 1 just in case
+            # Normalize over real neighbors only
             avg_attn = avg_attn / (avg_attn.sum() + 1e-9)
-            # Shannon Entropy: -sum(p * log(p))
-            entropy = -torch.sum(avg_attn * torch.log(avg_attn + 1e-9)).item()
-            # Normalize entropy by max possible (log(N))
-            max_entropy = np.log(len(avg_attn)) if len(avg_attn) > 1 else 1.0
-            metrics["attention_sharpness"] = 1.0 - (entropy / max_entropy) if max_entropy > 0 else 1.0
+            
+            if len(avg_attn) > 1:
+                # Shannon Entropy: -sum(p * log(p))
+                entropy = -torch.sum(avg_attn * torch.log(avg_attn + 1e-9)).item()
+                # Normalize entropy by max possible (log(N))
+                max_entropy = np.log(len(avg_attn))
+                metrics["attention_sharpness"] = 1.0 - (entropy / max_entropy)
+            else:
+                # If only one real neighbor, focus is absolute (1.0)
+                metrics["attention_sharpness"] = 1.0
         else:
-            metrics["attention_sharpness"] = 1.0
+            # No neighbors = no focus possible or isolated node
+            metrics["attention_sharpness"] = 0.0
     except Exception:
-        metrics["attention_sharpness"] = 0.5
+        metrics["attention_sharpness"] = 0.0
         
     return metrics
 
