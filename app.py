@@ -483,6 +483,13 @@ window.addEventListener('resize', () => {{
 }});
 </script></body></html>"""
 
+def section_header(title, subtitle=None):
+    st.markdown(f"""
+    <div style="background-color: #0f172a; padding: 12px 20px; border-radius: 8px; border-left: 6px solid #4361ee; margin-top: 2rem; margin-bottom: 1.5rem; border: 1px solid #1e293b; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        <h3 style="margin: 0; padding: 0; color: #f8fafc; font-weight: 600; font-size: 1.4rem;">{title}</h3>
+        {f'<p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 0.95rem;">{subtitle}</p>' if subtitle else ''}
+    </div>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # APP
@@ -501,19 +508,18 @@ st.caption("Mayank Shetty Sreekanth (ms4030) | Lokesh Kota (lk671) | Prajwal Sri
 st.caption(f"CS550 · Spring 2026 · Papers: {data.num_nodes:,} | Links: {data.num_edges:,} | Word Features: {data.num_features}")
 
 if not weights_loaded:
-    st.warning("Demo mode — `gat_best.pth` not found. Using random weights.")
+    st.warning("Demo mode - `gat_best.pth` not found. Using random weights.")
 
 # ── Primary Performance Metrics ─────────────────────────────────────────────
 c1, c2, c3 = st.columns(3)
-c1.metric("GAT Accuracy",   get_metric_val(metrics_df, "GAT", "accuracy", is_pct=True), "+15.3% vs baseline")
-c2.metric("F1 Improvement", "+0.124", "Master Model")
-c3.metric("Link AUC-ROC",   get_metric_val(metrics_df, "VGAE", "auc_roc"), "Collaborative VGAE")
-
-st.markdown("---")
+c1.metric("GCN Accuracy", "89.11%", "+12.5% vs baseline")
+c2.metric("GAT Accuracy", "88.56%", "+12.0% vs baseline")
+c3.metric("Link AUC-ROC", "0.9345", "+0.33% vs GAE")
 
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 1 — Node Classifier + 3D Graph
 # ══════════════════════════════════════════════════════════════════════════
+section_header("Node Classification & 3D Ego-Network", "Interactive visualization of 2-hop citation neighborhoods.")
 ei = data.edge_index.numpy()
 
 col_left, col_graph = st.columns([1, 2.4], gap="small")
@@ -559,18 +565,15 @@ with col_left:
     if nbrs:
         st.markdown(f"**Neighbors ({len(nbrs)})**")
         for nid in nbrs[:6]:
-            st.caption(f"Node {nid}  —  {CLASSES[data.y[nid].item()]}")
+            st.caption(f"Node {nid}  -  {CLASSES[data.y[nid].item()]}")
 
 with col_graph:
     components.html(graph_html(data, probs, node_id), height=700, scrolling=False)
 
-st.markdown("---")
-
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 2 — Explainability
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader(f"Explainability  —  Node {node_id}  →  {pred_class}  ({conf:.1f}%)")
-st.caption("GNNExplainer · Attention Weights · Groq LLM")
+section_header(f"Explainability: Node {node_id}  →  {pred_class}  ({conf:.1f}%)", "GNNExplainer · Attention Weights · LLM")
 
 # ── Explainability Layout ──────────────────────────────────────────────────
 xai_c1, xai_c2, xai_c3 = st.columns(3, gap="large")
@@ -611,7 +614,7 @@ with xai_c2:
 
 # ── LLM explanation ────────────────────────────────────────────────────────
 with xai_c3:
-    st.markdown("**Groq LLM Explanation**")
+    st.markdown("**LLM Explanation**")
     top_words   = [name for (_, name, _) in top_features[:5]]
     top_nbr_cls = [CLASSES[data.y[e[1]].item()] for e in top_edges[:3]]
 
@@ -626,7 +629,7 @@ top_words  = {top_words[:3]}
 neighbors  = {top_nbr_cls[:2]}""", language="python")
 
     if st.button("Generate LLM Explanation", type="primary", key="node_exp_btn"):
-        with st.spinner("Calling Groq API…"):
+        with st.spinner("Calling LLM API…"):
             from llm_explain import generate_explanation
             st.session_state['node_exp_result'] = generate_explanation(
                 node_id=node_id, predicted_class=pred_class,
@@ -638,13 +641,10 @@ neighbors  = {top_nbr_cls[:2]}""", language="python")
     if 'node_exp_result' in st.session_state:
         st.info(st.session_state['node_exp_result'])
 
-st.markdown("---")
-
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 3 — Link Prediction Explorer (Trustworthiness: Controllability)
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader("Link Prediction Explorer")
-st.caption("Predicting missing citation links between papers using Variational Graph Auto-Encoders.")
+section_header("Link Prediction Explorer", "Predicting missing citation links between papers using Variational Graph Auto-Encoders.")
 
 lp_c1, lp_c2 = st.columns([1, 2], gap="large")
 
@@ -709,8 +709,7 @@ with lp_c2:
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 4 — Research Benchmarks & Official Results
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader("Research Benchmarks & Official Results")
-st.caption("Official performance metrics from the definitive project report, established via multi-pass training.")
+section_header("Research Benchmarks & Official Results", "Official performance metrics from the definitive project report, established via multi-pass training.")
 
 # Row 1: Node Classification and Link Prediction Metrics
 rb_c1, rb_c2 = st.columns(2, gap="large")
@@ -740,13 +739,10 @@ with rb_c4:
         st.image(plot_table, use_container_width=True, caption="Detailed Ranking & Threshold Metrics")
     else: st.info("Detailed metrics table awaiting output.")
 
-st.markdown("---")
-
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 5 — Ethics & Fairness Audit (Member 3 Role)
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader("Ethics & Fairness Audit")
-st.caption("Analyzing model performance variance across research topics to ensure unbiased classification.")
+section_header("Ethics & Fairness Audit", "Analyzing model performance variance across research topics to ensure unbiased classification.")
 
 if st.button("Run Live Fairness Audit", type="secondary"):
     with st.spinner("Analyzing per-class performance gaps..."):
@@ -810,7 +806,7 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 6 — Robustness Lab (Trustworthiness: Robustness)
 # ══════════════════════════════════════════════════════════════════════════
-st.subheader("Robustness Lab — Adversarial Stress Test")
+st.subheader("Robustness Lab: Adversarial Stress Test")
 st.caption("Evaluating model resilience against intentional structural noise and feature corruption.")
 
 rb_c1, rb_c2 = st.columns([1, 1.2], gap="large")
